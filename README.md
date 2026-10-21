@@ -10,7 +10,7 @@ Each folder is self-contained, with its own README, code and tests.
 
 | Topic | What it shows | Source |
 |-------|---------------|--------|
-| _coming soon_ | | |
+| [MLE → least squares](mle-least-squares/) | Likelihood, the log trick, Gaussian MLE, why least squares *is* MLE, gradient-descent step sizes | DX601 Week 7 |
 
 ## Run it
 
