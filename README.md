@@ -10,7 +10,8 @@ Each folder is self-contained, with its own README, code and tests.
 
 | Topic | What it shows | Source |
 |-------|---------------|--------|
-| _coming soon_ | | |
+| [MLE → least squares](mle-least-squares/) | Likelihood, the log trick, Gaussian MLE, why least squares *is* MLE, gradient-descent step sizes | DX601 Week 7 |
+| [Vector similarity](vector-similarity/) | L1/L2/max norms, Euclidean vs cosine, nearest neighbors in pure Python and NumPy, why feature scaling matters | DX601 Week 8 |
 
 ## Run it
 
