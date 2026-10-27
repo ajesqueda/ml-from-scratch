@@ -85,7 +85,7 @@ The tests plug random values of `t` back into `Ax` and check they still give `b`
   1e-17 blows rounding error up into garbage, and the largest pivot keeps every
   multiplier at most 1.
 
-## What the tests check (194)
+## What the tests check (162)
 
 - Rank matches `np.linalg.matrix_rank` on 40 random matrices, half of them built to
   have low rank.
