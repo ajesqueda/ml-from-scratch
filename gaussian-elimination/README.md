@@ -5,6 +5,9 @@ there are **0, 1 or infinitely many** solutions, writes infinite solutions in
 parametric form, and inverts matrices by reducing `[A | I]`. A trace mode prints
 every row operation with the columns lined up.
 
+It also turns messy written equations like `3x = 4 + z` into `A` and `b`, and shows
+matrix × vector both ways (row view and column view).
+
 > Concept from BU DX601 (Mathematical Foundations of ML), Week 9: systems of linear
 > equations. All code is my own.
 
@@ -55,6 +58,55 @@ An inconsistent one (same left side, right side doesn't add up):
 no solution (a row reads 0 = non-zero)
 ```
 
+## From messy equations to `Ax = b`
+
+`equations.py` does the tidying step you'd otherwise do by hand, and `explain=True`
+prints each move:
+
+```bash
+python gaussian-elimination/equations.py
+```
+
+```
+equation 2
+  start:     3x = 4 + z
+  move:      + z crosses '=' to the left as - z
+  regroup:   3x - z = 4
+  fill 0s:   3x + 0y - 1z = 4
+  row 2:     [3, 0, -1]   b2 = 4
+...
+A = [['2', '1', '0'], ['3', '0', '-1'], ['0', '-1', '1']]
+b = ['5', '4', '0']
+
+unique solution x = [9/5, 7/5, 7/5]   (order: x, y, z)
+```
+
+The rules it follows:
+
+1. **Fix the variable order.** By default it's sorted (`x, y, z` or `x1, x2, …, x10`),
+   not the order the variables happen to appear in.
+2. **Variables go left, numbers go right.** Anything that crosses `=` flips its sign.
+3. **Nothing is left implicit.** A bare `x` means `1x`, and a missing variable gets a
+   `0` in its column.
+4. **One equation is one row.** Its right side becomes that row's entry of `b`.
+
+Flipping every sign in an equation, `b` included, gives the same system. The tests
+check that both versions have the same solution.
+
+## Matrix × vector, two views
+
+`matvec.py` computes `Ax` two ways and the tests check they always agree with each
+other and with NumPy:
+
+```
+row view:     [8, 9]   = [2*3 + 1*2, 1*3 + 3*2]     each entry = one row · x
+column view:  [8, 9]   = 3*[2, 1] + 2*[1, 3]        x is a recipe for mixing columns
+```
+
+The row view is how you compute by hand. The column view is how to *think* about
+`Ax = b`: which mix of A's columns produces `b`? An m × n matrix takes a vector with n
+entries and gives back m.
+
 ## API
 
 | Function | Returns |
@@ -63,6 +115,8 @@ no solution (a row reads 0 = non-zero)
 | `row_echelon(M)`, `rank(M)` | Forward pass only; rank = number of pivots |
 | `solve_system(A, b, trace=False)` | `Solution` with `kind` of `"none"`, `"unique"` or `"infinite"`, plus `particular`, `directions`, `free_vars`, `bound_vars` |
 | `inverse(A, trace=False)` | A⁻¹ from `[A \| I]`, or `ValueError` if A is singular |
+| `parse_system(equations, variables=None, explain=False)` | `(variable order, A, b)` from equation strings |
+| `matvec_rows(A, x)`, `matvec_columns(A, x)` | `Ax` by the row view and the column view |
 
 ## Reading a parametric solution
 
@@ -85,7 +139,7 @@ The tests plug random values of `t` back into `Ax` and check they still give `b`
   1e-17 blows rounding error up into garbage, and the largest pivot keeps every
   multiplier at most 1.
 
-## What the tests check (162)
+## What the tests check (245)
 
 - Rank matches `np.linalg.matrix_rank` on 40 random matrices, half of them built to
   have low rank.
@@ -97,3 +151,11 @@ The tests plug random values of `t` back into `Ax` and check they still give `b`
   - every point on the parametric solution satisfies `Ax = b`
 - No solution, 0 pivots, forced row swaps, wide systems and singular matrices are
   each covered.
+- Every row operation can be undone. Random sequences of swaps, scalings and
+  add-a-multiples are reversed by applying the inverse moves in **reverse order**, which
+  restores the original matrix, and the rank never changes along the way. Undoing in
+  the forward order does not.
+- The equation parser handles sign flips across `=`, like terms, fractions and
+  decimals, `x1…x10` ordering and missing variables, and it rejects malformed input.
+- The row and column views of `Ax` match `A @ x` on 30 random shapes, and wrong shapes
+  are rejected.
