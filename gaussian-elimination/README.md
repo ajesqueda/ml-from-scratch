@@ -107,6 +107,51 @@ The row view is how you compute by hand. The column view is how to *think* about
 `Ax = b`: which mix of A's columns produces `b`? An m × n matrix takes a vector with n
 entries and gives back m.
 
+## Triangular solves and LU: why libraries factor once
+
+`triangular.py` splits solving into two parts:
+
+```
+forward_sub   L y = b   top to bottom      ~ n²/2 work
+back_sub      U x = y   bottom to top      ~ n²/2 work
+lu            P A = L U                    ~ n³/3 work (elimination, keeping its multipliers in L)
+lu_solve      forward_sub + back_sub on saved factors
+```
+
+Every step `R_i ← R_i − m·R_k` of the forward pass stores `m` in `L[i][k]`. When the pass
+finishes, the matrix it leaves behind is `U`, and `L × U` rebuilds the (row-swapped) `A`
+exactly. The tests check that fraction for fraction.
+
+The expensive part, factoring, happens once. Each new right-hand side `b` then costs
+only two triangular solves. The code counts multiplications and divisions exactly
+instead of timing them:
+
+```bash
+python gaussian-elimination/triangular.py
+```
+
+```
+   n   LU factor   one solve with LU
+  10         375                 110
+  20       2,850                 420   x7.6 and x3.8 when n doubles
+  40      22,100               1,640   x7.8 and x3.9 when n doubles
+  80     173,800               6,480   x7.9 and x4.0 when n doubles
+```
+
+Doubling `n` multiplies factoring work by about 8 (n³) and solving work by about 4 (n²).
+At n = 80, one factorization costs as much as about 27 solves.
+
+The same file also has:
+
+- **`classify_by_rank(A, b)`**, which decides 0, 1 or ∞ solutions from two ranks,
+  without solving anything. If adding `b` raises the rank there's no solution, a pivot
+  in every column means one solution, and otherwise there are free variables. The
+  tests check it agrees with `solve_system` on 40 random systems.
+- **`quadratic_minimum(H, g)`**, which minimizes `f(x) = ½xᵀHx + gᵀx` by solving
+  `Hx = −g`, the linear system you get by setting every partial derivative to 0. For
+  `x² + xy + y² − 3x − 3y` it returns `(1, 1)`. It refuses saddles like `x² − y²`,
+  using `is_positive_definite`: every pivot must be positive with no row swaps.
+
 ## API
 
 | Function | Returns |
@@ -117,6 +162,10 @@ entries and gives back m.
 | `inverse(A, trace=False)` | A⁻¹ from `[A \| I]`, or `ValueError` if A is singular |
 | `parse_system(equations, variables=None, explain=False)` | `(variable order, A, b)` from equation strings |
 | `matvec_rows(A, x)`, `matvec_columns(A, x)` | `Ax` by the row view and the column view |
+| `forward_sub(L, b)`, `back_sub(U, b)` | Triangular solves; a 0 on the diagonal raises with an explanation |
+| `lu(A)`, `lu_solve(factors, b)` | `P A = L U` with exact fractions; solve many `b` with one factorization |
+| `classify_by_rank(A, b)` | `"none"`, `"unique"` or `"infinite"` from `rank(A)` vs `rank([A \| b])` |
+| `quadratic_minimum(H, g)` | Minimum of `½xᵀHx + gᵀx` via `Hx = −g` (H must be positive definite) |
 
 ## Reading a parametric solution
 
@@ -139,7 +188,7 @@ The tests plug random values of `t` back into `Ax` and check they still give `b`
   1e-17 blows rounding error up into garbage, and the largest pivot keeps every
   multiplier at most 1.
 
-## What the tests check (245)
+## What the tests check (361)
 
 - Rank matches `np.linalg.matrix_rank` on 40 random matrices, half of them built to
   have low rank.
@@ -159,3 +208,10 @@ The tests plug random values of `t` back into `Ax` and check they still give `b`
   decimals, `x1…x10` ordering and missing variables, and it rejects malformed input.
 - The row and column views of `Ax` match `A @ x` on 30 random shapes, and wrong shapes
   are rejected.
+- Triangular solves match `scipy.linalg.solve_triangular`. LU satisfies `P A = L U`
+  exactly, and its solutions and determinants match `scipy.linalg`. Operation counts
+  are exactly `n(n+1)/2` per triangular solve and grow about 8× and 4× when `n` doubles.
+- The rank rule agrees with elimination on 40 random systems, and collinear and
+  parallel equations are told apart.
+- The quadratic minimum has zero gradient, beats every point on a 13³ grid, and
+  saddles are rejected.
