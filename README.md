@@ -13,7 +13,7 @@ Each folder is self-contained, with its own README, code and tests.
 | [MLE → least squares](mle-least-squares/) | Likelihood, the log trick, Gaussian MLE, why least squares *is* MLE, gradient-descent step sizes | DX601 Week 7 |
 | [Vector similarity](vector-similarity/) | L1/L2/max norms, Euclidean vs cosine, nearest neighbors in pure Python and NumPy, why feature scaling matters | DX601 Week 8 |
 | [Gaussian elimination](gaussian-elimination/) | Row reduction with exact fractions and a step trace; 0/1/∞ solutions, parametric form, inverse via `[A \| I]`; messy equations → `Ax = b`; row vs column view of `Ax`; triangular solves, LU and the n³ vs n² cost; quadratic minima | DX601 Week 9 |
-| [Vector spaces](vector-spaces/) | Span, rank and coordinates; Gram-Schmidt (classical vs modified, and where classical breaks); projections onto lines and subspaces; why `PP = P` isn't enough for the closest point | DX601 Week 10 |
+| [Vector spaces](vector-spaces/) | Null spaces, pivots and columns − rank; equations for a span; intersections; span, rank and coordinates; Gram-Schmidt (classical vs modified, and where classical breaks); projections onto lines and subspaces; why `PP = P` isn't enough for the closest point; PCA preview and why it centers | DX601 Week 10 |
 
 ## Run it
 
