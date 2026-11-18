@@ -15,6 +15,7 @@ Each folder is self-contained, with its own README, code and tests.
 | [Gaussian elimination](gaussian-elimination/) | Row reduction with exact fractions and a step trace; 0/1/∞ solutions, parametric form, inverse via `[A \| I]`; messy equations → `Ax = b`; row vs column view of `Ax`; triangular solves, LU and the n³ vs n² cost; quadratic minima | DX601 Week 9 |
 | [Vector spaces](vector-spaces/) | Null spaces, pivots and columns − rank; equations for a span; intersections; span, rank and coordinates; Gram-Schmidt (classical vs modified, and where classical breaks); projections onto lines and subspaces; why `PP = P` isn't enough for the closest point; PCA preview and why it centers | DX601 Week 10 |
 | [Determinants](determinants/) | Determinant as an area scale factor, the box proof of ad − bc, signed area and mirroring, exact det from LU pivots and row swaps, row-operation rules, why rows of A⁻¹ are recipes; cofactor expansion and Cramer's rule with measured n! vs n³ vs n⁴ costs; det vs area | DX601 Week 11 |
+| [Eigenvalues and eigenvectors](eigen/) | 2×2 eigenvalues from trace and det (exact when clean), eigenvectors with the swap-and-negate rule, rotations, shears and repeated eigenvalues, power iteration for λ₁ | DX601 Week 12 |
 
 ## Run it
 
