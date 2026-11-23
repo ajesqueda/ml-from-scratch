@@ -17,6 +17,7 @@ Each folder is self-contained, with its own README, code and tests.
 | [Determinants](determinants/) | Determinant as an area scale factor, the box proof of ad − bc, signed area and mirroring, exact det from LU pivots and row swaps, row-operation rules, why rows of A⁻¹ are recipes; cofactor expansion and Cramer's rule with measured n! vs n³ vs n⁴ costs; det vs area | DX601 Week 11 |
 | [Eigenvalues and eigenvectors](eigen/) | 2×2 eigenvalues from trace and det (exact when clean), eigenvectors with the swap-and-negate rule, rotations, shears and repeated eigenvalues, power iteration for λ₁ | DX601 Week 12 |
 | [Markov chains](markov/) | Exact steady states (swap-and-flip, normalize by the sum), chains that never settle, how fast a chain forgets its start (\|λ₂\|), Aᵏy from eigen-pieces, eigenvalue rules for A², A + cI, cA, A⁻¹ | DX601 Week 12 |
+| [PCA](pca/) | PCA from the covariance matrix with its invariants checked on random data, how many components, why units matter, coordinates and reconstruction error, random projection, two-class LDA | DX601 Week 13 |
 
 ## Run it
 
