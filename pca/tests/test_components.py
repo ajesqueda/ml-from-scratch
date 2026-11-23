@@ -102,10 +102,20 @@ def test_coordinates_are_dot_products_with_the_centered_row():
                        [w @ (row - model.mean) for w in model.directions.T])
 
 
+def test_tied_entries_use_the_first_one_for_the_sign():
+    from components import _fix_signs
+
+    v = np.array([[0.70710678, 0.70710678], [0.70710678000001, -0.70710678]])
+    flipped = _fix_signs(-v)
+    assert flipped[0, 0] > 0 and flipped[0, 1] > 0  # first entry positive, even in a tie
+    assert np.allclose(_fix_signs(v), _fix_signs(-v))
+
+
 def test_signs_are_deterministic():
     model = fit(DATA[2])
     big = np.argmax(np.abs(model.directions), axis=0)
     assert np.all(model.directions[big, np.arange(model.directions.shape[1])] > 0)
+    assert np.allclose(fit(DATA[2]).directions, fit(DATA[2] * 1.0).directions)
 
 
 # --- how many components -------------------------------------------------------------------

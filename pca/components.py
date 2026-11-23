@@ -26,9 +26,15 @@ def covariance(X) -> np.ndarray:
     return Xc.T @ Xc / len(X)
 
 
-def _fix_signs(vecs: np.ndarray) -> np.ndarray:
-    """An eigenvector's sign is arbitrary; make each column's largest entry positive."""
-    idx = np.argmax(np.abs(vecs), axis=0)
+def _fix_signs(vecs: np.ndarray, tol: float = 1e-9) -> np.ndarray:
+    """An eigenvector's sign is arbitrary; make each column's largest entry positive.
+
+    Entries that tie for largest, like the two in (0.707, −0.707), differ only by
+    rounding noise, so the first of them decides. Otherwise the sign could change
+    from one machine to the next.
+    """
+    mags = np.abs(vecs)
+    idx = np.argmax(mags >= mags.max(axis=0) - tol, axis=0)  # first near-largest entry
     signs = np.sign(vecs[idx, np.arange(vecs.shape[1])])
     return vecs * np.where(signs == 0, 1, signs)
 
