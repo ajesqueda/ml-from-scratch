@@ -2,14 +2,15 @@
 
     fit(X)                     center, C = XcᵀXc / n, eigenvectors biggest-variance first
     PCA.components_for(0.9)    smallest k whose variance share reaches the target
-    PCA.coordinates(X)         c_i = w_i · (x − μ)
-    PCA.reconstruct(Z, k)      μ + c_1 w_1 + … + c_k w_k
+    PCA.coordinates(X)         c_i = w_i · (x − μ) / s
+    PCA.reconstruct(Z, k)      μ + s ∘ (c_1 w_1 + … + c_k w_k)
     random_projection(d, k)    a random k×d matrix scaled by 1/√k
     lda(X0, X1)                w = Σ⁻¹(μ1 − μ0) and the midpoint threshold
 
 A fitted PCA keeps `directions` (the principal components, unit vectors) and
 `variances` (the eigenvalues λ) as separate fields: PC1 is a direction, λ1 is how
-much the data spreads along it.
+much the data spreads along it. s is each column's standard deviation when fitted
+with standardize=True, and 1 otherwise (then the formulas are the plain ones).
 """
 
 from __future__ import annotations
@@ -48,7 +49,11 @@ class PCA:
 
     def explained(self) -> np.ndarray:
         """Each component's share of the total variance: λ_i / Σλ."""
-        return self.variances / self.variances.sum()
+        total = self.variances.sum()
+        if total == 0:
+            raise ValueError("the data has no variance (every row is the same), "
+                             "so no component explains any of it")
+        return self.variances / total
 
     def components_for(self, target: float) -> int:
         """Smallest k whose running share reaches `target` (a count, not a share)."""
@@ -58,14 +63,20 @@ class PCA:
         return int(np.argmax(running >= target - 1e-12) + 1)
 
     def coordinates(self, X) -> np.ndarray:
-        """Each row's coordinates along the PCs: dot products with the centered row."""
+        """Each row's coordinates along the PCs: w_i · (x − μ) / s for every row."""
         Z = (np.asarray(X, dtype=float) - self.mean) / self.scale
         return Z @ self.directions
 
     def reconstruct(self, coords, k: int | None = None) -> np.ndarray:
-        """Rebuild rows from their first k coordinates (all of them by default)."""
+        """Rebuild rows from their first k coordinates (all of them by default).
+
+        μ + s ∘ (c_1 w_1 + … + c_k w_k): rebuilt in the standardized space, then
+        scaled back to the original units.
+        """
         coords = np.atleast_2d(coords)
         k = coords.shape[1] if k is None else k
+        if not 0 <= k <= min(coords.shape[1], self.directions.shape[1]):
+            raise ValueError(f"k = {k}: need 0 <= k <= {coords.shape[1]} components")
         rebuilt = coords[:, :k] @ self.directions[:, :k].T
         return rebuilt * self.scale + self.mean
 
@@ -94,14 +105,21 @@ def random_projection(d: int, k: int, rng: np.random.Generator) -> np.ndarray:
     Each squared length is kept on average: E‖Rx‖² = ‖x‖², because every row of R
     contributes (r·x)² with E[(r·x)²] = ‖x‖² / k. No training needed.
     """
+    if d < 1 or k < 1:
+        raise ValueError("projecting needs d >= 1 input and k >= 1 output dimensions")
     return rng.standard_normal((k, d)) / np.sqrt(k)
 
 
 def squared_distance_ratios(X, R) -> np.ndarray:
-    """‖R(x − y)‖² / ‖x − y‖² for every pair of rows."""
+    """‖R(x − y)‖² / ‖x − y‖² for every pair of distinct rows.
+
+    Identical rows are skipped: their distance is 0 before and after, so the ratio
+    0/0 says nothing about stretching.
+    """
     X = np.asarray(X, dtype=float)
     i, j = np.triu_indices(len(X), k=1)
     diffs = X[i] - X[j]
+    diffs = diffs[(diffs**2).sum(axis=1) > 0]
     return ((diffs @ R.T) ** 2).sum(axis=1) / (diffs**2).sum(axis=1)
 
 
@@ -115,11 +133,14 @@ def lda(X0, X1) -> tuple[np.ndarray, float]:
 
     Without Σ⁻¹ the direction is just "connect the means". Σ⁻¹ turns it away from
     directions where each class is noisy, toward ones where the classes are tight.
+
+    If Σ can't be inverted (a column that's a copy of another, or too few points),
+    the pseudoinverse gives the shortest w that works, instead of failing.
     """
     X0, X1 = np.asarray(X0, dtype=float), np.asarray(X1, dtype=float)
     mu0, mu1 = X0.mean(axis=0), X1.mean(axis=0)
     pooled = (len(X0) * covariance(X0) + len(X1) * covariance(X1)) / (len(X0) + len(X1))
-    w = np.linalg.solve(pooled, mu1 - mu0)
+    w = np.linalg.pinv(pooled, hermitian=True) @ (mu1 - mu0)
     return w, float(0.5 * w @ (mu1 + mu0))
 
 
