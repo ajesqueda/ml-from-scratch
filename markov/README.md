@@ -3,8 +3,8 @@
 A Markov chain is a matrix power in disguise: tomorrow's probabilities are `P` times
 today's, so the probabilities k days out are `Pᵏ` times today's. Eigenvectors explain
 both what the chain settles into (the eigenvector for λ = 1) and how fast it forgets
-where it started (the next-biggest |λ|). This folder computes both exactly with
-fractions, building on [`eigen/`](../eigen/) and the exact null space in
+where it started (the next-biggest |λ|). This folder computes steady states and
+distributions exactly with fractions (the forgetting speed is a float estimate), building on [`eigen/`](../eigen/) and the exact null space in
 [`vector-spaces/`](../vector-spaces/).
 
 > Concept from BU DX601 (Math for Data Science), Week 12: matrix powers, power iteration and Markov chains.
@@ -15,7 +15,7 @@ fractions, building on [`eigen/`](../eigen/) and the exact null space in
 |----------|--------------|
 | `steady_state(P)` | Solves `(P − I)s = 0` and scales s to add up to 1; swap-and-flip for 2×2, exact null space for bigger chains |
 | `distribution_after(P, s0, k)` | `Pᵏ s0` by multiplying k times |
-| `mixing_factor(P)` | \|λ₂\|: the fraction of "where it started" that survives each step |
+| `mixing_factor(P)` | \|λ₂\| (float): how fast the chain forgets where it started |
 | `power_via_eigen(A, y, k)` | `Aᵏ y` from eigen-pieces, no repeated multiplying |
 | `check_stochastic(P)` | Columns must be non-negative and sum to 1 (columns are "from") |
 | `swap_and_flip(a, b)` | A non-zero solution of `a·s₁ + b·s₂ = 0` |
@@ -78,6 +78,12 @@ one, **|λ₂|**, decides how long the start is remembered. For the weather chai
 why day 10 is already at 0.8332. When |λ₂| = 1 (flip-flop, or a split chain), the start
 is never forgotten.
 
+That "exactly 40% each day" holds for every 2-state chain. In bigger chains |λ₂| is the
+**long-run** rate: if a repeated eigenvalue is missing an eigenvector, the gap picks up
+an extra factor like k·|λ₂|ᵏ, so the first few steps can shrink by less. `mixing_factor`
+is computed with floating-point eigenvalues, so it's an estimate, unlike the exact
+steady states.
+
 This is the power-iteration "shrink factor" question: |smaller λ| ÷ |bigger λ|, with no
 multiplying needed. For a Markov chain the bigger λ is 1, so it's just |λ₂|.
 
@@ -123,10 +129,12 @@ random 3×3 matrices.
 
 ## Tests
 
-`tests/test_chains.py` (71 tests): exact steady states for hand examples and decimal
+`tests/test_chains.py` (79 tests): exact steady states for hand examples and decimal
 inputs; `P s = s`, `sum(s) = 1` and positive entries on random 2×2 to 5×5 chains,
 matching NumPy's λ = 1 eigenvector; convergence from any start; swap-and-flip and
 normalizing; the identity, split and flip-flop chains; rows-vs-columns and negative
-entries rejected; the gap to the steady state shrinking by exactly |λ₂| per step;
+entries rejected; the gap to the steady state
+shrinking by exactly |λ₂| per step (2-state chains);
 `Aᵏy` from eigen-pieces matching `matrix_power`; and the eigenvalue rules with the
-trace/det check.
+trace/det check; plus bad input: empty matrices, negative steps, a start
+vector of the wrong length, a one-state chain, and floats read as their decimals.

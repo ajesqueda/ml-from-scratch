@@ -52,21 +52,37 @@ def eig2x2(A) -> list[Number]:
 
     det(λI − A) = λ² − (trace)λ + det = 0, so with m = trace/2 and p = det,
     λ = m ± √(m² − p). The two add to the trace and multiply to the det.
+
+    m² − p is computed as ((a − d)/2)² + bc, the same number written without
+    subtracting two big, nearly equal ones, so floats like [[1e8, 1], [1, 1e8]] keep
+    their two eigenvalues apart. With floats, the smaller root comes from det ÷ the
+    bigger one, so it isn't lost when the two differ hugely in size.
     """
-    t, p = trace_det(A)
+    a, b, c, d = _matrix(A)
+    t, p = a + d, a * d - b * c
     m = t / 2
-    disc = m * m - p
+    disc = ((a - d) / 2) ** 2 + b * c
     if disc < 0:
         raise NoRealEigenvalues(f"m² − p = {disc} < 0: no real eigenvalues")
     root = _rational_sqrt(disc) if isinstance(disc, Fraction) else None
-    if root is None:
-        root = sqrt(disc)
-        m = float(m)
-    return sorted([m + root, m - root], key=lambda lam: -abs(lam))
+    if root is not None:
+        return sorted([m + root, m - root], key=lambda lam: -abs(lam))
+    m, root = float(m), sqrt(disc)
+    big = m + root if m >= 0 else m - root  # adding same signs: no cancellation
+    small = float(p) / big if big != 0 else m - root
+    return sorted([big, small], key=lambda lam: -abs(lam))
 
 
-def _is_zero(x: Number) -> bool:
-    return x == 0 if isinstance(x, Fraction) else abs(x) < 1e-9
+def _is_zero(x: Number, scale: float = 1.0) -> bool:
+    """Exactly 0 for fractions; for floats, tiny compared with `scale`.
+
+    The cutoff follows the size of the numbers involved, so a matrix with entries
+    around 1e-12 isn't treated as all zeros, and one around 1e12 isn't held to an
+    accuracy floats can't give.
+    """
+    if isinstance(x, Fraction):
+        return x == 0
+    return abs(x) <= 1e-9 * (scale or 1.0)
 
 
 def _whole_numbers(v: list[Fraction]) -> list[int]:
@@ -101,12 +117,13 @@ def eigenvector(A, lam: Number) -> list[list[Number]]:
     else:
         lam = Fraction(lam)
     m11, m12, m21, m22 = a - lam, b, c, d - lam
+    s = max(abs(float(x)) for x in (a, b, c, d, lam))  # size of the numbers, for floats
     det = m11 * m22 - m12 * m21
-    if not _is_zero(det):
+    if not _is_zero(det, s * s):
         raise ValueError(f"{lam} isn't an eigenvalue: the rows of A − λI aren't multiples")
-    if all(_is_zero(x) for x in (m11, m12, m21, m22)):
+    if all(_is_zero(x, s) for x in (m11, m12, m21, m22)):
         return [[1, 0], [0, 1]]  # A − λI = 0 means A = λI: every vector is an eigenvector
-    row = (m11, m12) if not (_is_zero(m11) and _is_zero(m12)) else (m21, m22)
+    row = (m11, m12) if not (_is_zero(m11, s) and _is_zero(m12, s)) else (m21, m22)
     v = [-row[1], row[0]]
     if all(isinstance(x, Fraction) for x in v):
         return [_whole_numbers(v)]
@@ -124,20 +141,36 @@ def eigenpairs(A) -> list[tuple[Number, list[list[Number]]]]:
     return [(lam, eigenvector(A, lam)) for lam in distinct]
 
 
-def power_iteration(A, steps: int = 200, start=(1.0, 0.3)) -> tuple[float, np.ndarray]:
+def power_iteration(A, steps: int = 200, start=(1.0, 0.3),
+                    check: bool = True) -> tuple[float, np.ndarray]:
     """Multiply a start vector by A over and over; it swings onto λ₁'s eigenvector.
 
     Each multiply scales the λ₁ part by |λ₁| and the λ₂ part by |λ₂|, so the λ₂ part
     fades by |λ₂/λ₁| per step. Rescale every step so nothing overflows. The Rayleigh
     quotient v·Av / v·v reads off λ₁ with its sign, even when λ₁ < 0 makes v flip
     direction on every step.
+
+    It needs one eigenvalue whose |λ| is strictly the biggest. When two tie (like
+    diag(1, −1)) or the biggest are a complex pair (a rotation), v never settles, so
+    the final check Av ≈ λv fails and this raises instead of returning a fake answer.
+    Pass check=False to see the estimate after only a few steps (to watch it converge).
+    A start with no λ₁ part at all only ever finds λ₂: that can't be detected, so the
+    default start avoids the easy cases (it isn't along either axis).
     """
+    if steps < 1:
+        raise ValueError("steps must be at least 1")
     M = np.array(A, dtype=float)
     v = np.array(start, dtype=float)
     for _ in range(steps):
         v = M @ v
-        v /= np.linalg.norm(v)
+        norm = np.linalg.norm(v)
+        if norm == 0:
+            raise ValueError("A sent the vector to 0, so this start has no λ₁ part to find")
+        v /= norm
     lam = float(v @ M @ v / (v @ v))
+    if check and np.linalg.norm(M @ v - lam * v) > 1e-6 * max(np.abs(M).max(), 1e-300):
+        raise ValueError("didn't settle on an eigenvector: no single biggest |λ| "
+                         "(a tie, or a complex pair)")
     return lam, np.array(_tidy_float(list(v)))
 
 

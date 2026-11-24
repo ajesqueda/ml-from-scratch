@@ -243,3 +243,55 @@ def test_with_round_noise_lda_is_connecting_the_means():
     naive = X1.mean(axis=0) - X0.mean(axis=0)
     cos = w @ naive / (np.linalg.norm(w) * np.linalg.norm(naive))
     assert cos > 0.999
+
+
+# --- bad or degenerate input -----------------------------------------------------------
+
+def test_data_with_no_variance_says_so_instead_of_claiming_a_component():
+    model = fit(np.ones((5, 3)))
+    with pytest.raises(ValueError, match="no variance"):
+        model.explained()
+    with pytest.raises(ValueError, match="no variance"):
+        model.components_for(0.9)
+
+
+@pytest.mark.parametrize("k", [-1, 4])
+def test_reconstruct_rejects_impossible_k(k):
+    model = fit(DATA[1])
+    with pytest.raises(ValueError, match="need 0 <= k"):
+        model.reconstruct(model.coordinates(DATA[1]), k)
+
+
+def test_reconstruct_with_zero_components_is_the_mean():
+    model = fit(DATA[1])
+    rebuilt = model.reconstruct(model.coordinates(DATA[1]), 0)
+    assert np.allclose(rebuilt, model.mean)
+
+
+@pytest.mark.parametrize("d, k", [(5, 0), (0, 3), (5, -2)])
+def test_random_projection_needs_positive_dimensions(d, k):
+    with pytest.raises(ValueError, match="dimensions"):
+        random_projection(d, k, rng)
+
+
+def test_duplicate_rows_are_skipped_not_nan():
+    X = np.array([[1.0, 2.0], [1.0, 2.0], [4.0, 6.0]])
+    ratios = squared_distance_ratios(X, np.eye(2))
+    assert len(ratios) == 2 and np.allclose(ratios, 1)
+
+
+def test_lda_works_when_a_column_copies_another():
+    local = np.random.default_rng(5)
+    a0, a1 = local.normal(0, 1, 200), local.normal(2, 1, 200)
+    X0, X1 = np.column_stack([a0, a0]), np.column_stack([a1, a1])  # singular Σ
+    w, c = lda(X0, X1)
+    assert np.all(np.isfinite(w)) and accuracy(w, c, X0, X1) > 0.8
+
+
+def test_lda_pinv_matches_solve_when_sigma_is_invertible():
+    local = np.random.default_rng(6)
+    X0 = local.normal(size=(100, 3))
+    X1 = local.normal(size=(100, 3)) + [1, 0.5, 0]
+    w, _ = lda(X0, X1)
+    pooled = (100 * covariance(X0) + 100 * covariance(X1)) / 200
+    assert np.allclose(w, np.linalg.solve(pooled, X1.mean(0) - X0.mean(0)))

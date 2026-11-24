@@ -3,11 +3,13 @@
     steady_state(P)          the distribution s with P s = s and sum(s) = 1, exact
     distribution_after(P, s0, k)    where the chain is after k steps: P^k s0
     power_via_eigen(A, y, k) A^k y from eigen-pieces: c1 λ1^k v1 + c2 λ2^k v2
-    mixing_factor(P)         |λ2|: how much of the starting state survives each step
+    mixing_factor(P)         |λ2|: how fast the chain forgets its starting state (float)
 
 Columns are "from" and rows are "to", so every column of P sums to 1 and a
-distribution is a column vector: next = P @ current. Exact fractions throughout,
-reusing ../vector-spaces/subspaces.py (null spaces) and ../eigen/eigen_by_hand.py.
+distribution is a column vector: next = P @ current. Exact fractions throughout
+(floats are read as the decimal they print as, so 0.3 is exactly 3/10), except
+mixing_factor, which is a floating-point eigenvalue estimate. Built on
+../vector-spaces/subspaces.py (null spaces) and ../eigen/eigen_by_hand.py.
 """
 
 from __future__ import annotations
@@ -29,15 +31,22 @@ Number = int | float | Fraction
 Matrix = list[list[Fraction]]
 
 
+def _frac(x: Number | str) -> Fraction:
+    """A float becomes the decimal it prints as (0.3 -> 3/10, not 5404319552844595/2^54)."""
+    return Fraction(str(x)) if isinstance(x, float) else Fraction(x)
+
+
 def as_matrix(P: Sequence[Sequence[Number]]) -> Matrix:
-    """Fractions from ints, Fractions or decimal strings ("0.3" stays exactly 3/10)."""
-    return [[Fraction(str(x)) if isinstance(x, float) else Fraction(x) for x in row] for row in P]
+    """Fractions from ints, Fractions, floats or decimal strings ("0.3" is exactly 3/10)."""
+    return [[_frac(x) for x in row] for row in P]
 
 
 def check_stochastic(P: Sequence[Sequence[Number]]) -> Matrix:
     """Columns are "from": each must be non-negative and sum to exactly 1."""
     M = as_matrix(P)
     n = len(M)
+    if n == 0:
+        raise ValueError("a transition matrix needs at least one state")
     if any(len(row) != n for row in M):
         raise ValueError("a transition matrix is square")
     for j in range(n):
@@ -51,12 +60,14 @@ def check_stochastic(P: Sequence[Sequence[Number]]) -> Matrix:
 
 def swap_and_flip(a: Number, b: Number) -> list[Number]:
     """A non-zero solution of a·s1 + b·s2 = 0: swap the numbers, flip one sign."""
+    if a == 0 and b == 0:
+        raise ValueError("0·s1 + 0·s2 = 0 holds for every s: there's no equation to solve")
     return [b, -a]
 
 
 def normalize(v: Sequence[Number]) -> list[Fraction]:
     """Divide EACH entry by the SUM of all entries, keeping the order."""
-    v = [Fraction(x) for x in v]
+    v = [_frac(x) for x in v]
     total = sum(v)
     if total == 0:
         raise ValueError("entries sum to 0, so they can't be scaled to probabilities")
@@ -88,20 +99,32 @@ def steady_state(P: Sequence[Sequence[Number]]) -> list[Fraction]:
 def distribution_after(P, s0: Sequence[Number], k: int) -> list[Fraction]:
     """P^k s0 by multiplying k times (the "run k steps" question)."""
     M = check_stochastic(P)
-    s = [Fraction(x) for x in s0]
+    if k < 0:
+        raise ValueError("k counts steps, so it can't be negative")
+    if len(s0) != len(M):
+        raise ValueError(f"s0 has {len(s0)} entries but the chain has {len(M)} states")
+    s = [_frac(x) for x in s0]
     for _ in range(k):
         s = [sum(M[i][j] * s[j] for j in range(len(s))) for i in range(len(M))]
     return s
 
 
 def mixing_factor(P) -> float:
-    """|λ2| for the chain: each step keeps that fraction of "where it started".
+    """|λ2| for the chain: the rate at which it forgets "where it started" (a float).
 
     The steady state is the λ = 1 piece, which never shrinks. Every other piece
     shrinks by its |λ| per step, so the slowest one, |λ2|, sets how long the chain
     remembers its start. |λ2| = 1 means it never forgets (it cycles or splits).
+
+    For a 2-state chain the gap shrinks by exactly |λ2| every step. In bigger chains
+    it's the long-run rate: a repeated λ without enough eigenvectors adds a factor
+    like k·|λ2|^k, so early steps can shrink less. A one-state chain is always at
+    its steady state, so there's nothing to forget: 0.
     """
-    lams = sorted(np.abs(np.linalg.eigvals(np.array(check_stochastic(P), dtype=float))))
+    M = check_stochastic(P)
+    if len(M) == 1:
+        return 0.0
+    lams = sorted(np.abs(np.linalg.eigvals(np.array(M, dtype=float))))
     return float(lams[-2])
 
 
@@ -112,13 +135,17 @@ def power_via_eigen(A, y: Sequence[Number], k: int) -> list[Fraction]:
     solve one for c1 and substitute into the OTHER. Then every multiply by A just
     scales each piece by its own λ, so A^k y = c1·λ1^k·v1 + c2·λ2^k·v2.
     """
-    pairs = eigenpairs(A)
+    if k < 0:
+        raise ValueError("k counts steps, so it can't be negative")
+    if len(y) != 2:
+        raise ValueError("this version is for 2×2 matrices, so y has two entries")
+    pairs = eigenpairs(as_matrix(A))  # floats read as decimals keep rational λ exact
     if len(pairs) != 2:
         raise ValueError("needs two distinct eigenvalues")
     (l1, (v1,)), (l2, (v2,)) = pairs
     if not all(isinstance(x, Fraction) for x in (l1, l2)):
         raise ValueError("this exact version needs rational eigenvalues")
-    y1, y2 = (Fraction(x) for x in y)
+    y1, y2 = (_frac(x) for x in y)
     # y1 = c1·v1[0] + c2·v2[0] and y2 = c1·v1[1] + c2·v2[1]: eliminate c1.
     det = v1[0] * v2[1] - v1[1] * v2[0]
     c2 = (v1[0] * y2 - v1[1] * y1) / det
