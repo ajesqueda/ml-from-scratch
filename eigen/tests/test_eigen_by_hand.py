@@ -150,6 +150,44 @@ def test_power_iteration_finds_lambda_1_with_its_sign(A, lam1):
 
 def test_power_iteration_converges_at_rate_lambda2_over_lambda1():
     A = [[4, 1], [2, 3]]  # |λ2 / λ1| = 2/5
-    errors = [abs(power_iteration(A, steps=k)[0] - 5) for k in (5, 10, 15)]
+    errors = [abs(power_iteration(A, steps=k, check=False)[0] - 5) for k in (5, 10, 15)]
     assert errors[0] > errors[1] > errors[2]
     assert errors[1] / errors[0] < (2 / 5) ** 4  # five more steps shrink it by > (2/5)^4
+
+
+# --- floats and power-iteration failure modes -------------------------------------------
+
+def test_close_float_eigenvalues_stay_apart():
+    lams = eig2x2([[1e8, 1.0], [1.0, 1e8]])
+    assert lams == pytest.approx([1e8 + 1, 1e8 - 1], abs=1e-6)
+
+
+def test_small_eigenvalue_survives_a_huge_one():
+    assert eig2x2([[1e20, 0.0], [0.0, 1.0]]) == pytest.approx([1e20, 1.0])
+
+
+def test_tiny_float_matrices_get_real_eigenvectors():
+    A = [[2e-12, 1e-12], [1e-12, 2e-12]]  # eigenvalues 3e-12 and 1e-12
+    with pytest.raises(ValueError, match="isn't an eigenvalue"):
+        eigenvector(A, 5e-12)
+    (v,) = eigenvector(A, 3e-12)
+    Av = matvec(A, v)
+    assert np.allclose(Av, [3e-12 * x for x in v], atol=1e-24)
+
+
+@pytest.mark.parametrize("steps", [0, -3])
+def test_power_iteration_needs_at_least_one_step(steps):
+    with pytest.raises(ValueError, match="at least 1"):
+        power_iteration([[2, 0], [0, 1]], steps=steps)
+
+
+def test_power_iteration_reports_hitting_zero():
+    with pytest.raises(ValueError, match="sent the vector to 0"):
+        power_iteration([[0, 0], [0, 0]])
+
+
+@pytest.mark.parametrize("A", [[[1, 0], [0, -1]],     # |λ| tie
+                               [[0, -1], [1, 0]]])    # rotation: complex pair
+def test_power_iteration_refuses_when_there_is_no_single_biggest(A):
+    with pytest.raises(ValueError, match="didn't settle"):
+        power_iteration(A)
