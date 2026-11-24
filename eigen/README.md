@@ -15,7 +15,7 @@ eigenvalue matters through power iteration.
 | `eig2x2(A)` | Both eigenvalues from trace and det, biggest \|λ\| first; exact when the square root is rational |
 | `eigenvector(A, λ)` | Solves `(A − λI)x = 0`; rejects a λ that isn't an eigenvalue |
 | `eigenpairs(A)` | Every distinct eigenvalue with its eigenvectors, including repeated eigenvalues |
-| `power_iteration(A)` | λ₁ and its eigenvector by multiplying by A over and over |
+| `power_iteration(A)` | λ₁ and its eigenvector by multiplying by A over and over; raises if it never settles (two \|λ\| tie, or a complex pair) |
 | `trace_det(A)` | The two numbers that decide everything for a 2×2 |
 
 ## Run it

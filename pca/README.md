@@ -15,10 +15,14 @@ random projection (no training at all) and LDA (uses labels to separate two clas
 | `fit(X, standardize=False)` | Center, `C = XcᵀXc / n`, eigenvectors of C biggest-variance first |
 | `PCA.directions` / `PCA.variances` | The principal components (unit vectors) and their λ, kept as separate fields |
 | `PCA.components_for(target)` | Smallest k whose running variance share reaches the target |
-| `PCA.coordinates(X)` | `cᵢ = wᵢ · (x − μ)` for every row |
-| `PCA.reconstruct(Z, k)` | `μ + c₁w₁ + … + cₖwₖ` |
+| `PCA.coordinates(X)` | `cᵢ = wᵢ · (x − μ) / s` for every row |
+| `PCA.reconstruct(Z, k)` | `μ + s ∘ (c₁w₁ + … + cₖwₖ)` |
 | `random_projection(d, k, rng)` | Random normal k×d matrix scaled by 1/√k |
 | `lda(X0, X1)` | `w = Σ⁻¹(μ₁ − μ₀)` and threshold `c = ½·w·(μ₁ + μ₀)` |
+
+`s` is each column's standard deviation for `fit(X, standardize=True)` and 1 otherwise,
+so without standardizing these are the plain formulas from the notes. `∘` multiplies
+entry by entry.
 
 ## Run it
 
@@ -60,10 +64,16 @@ its share λ₁ / Σλ).
 Building `C − λI` means subtracting λ **from the diagonal only**: λI has λ on the
 diagonal and 0 everywhere else. After that, the rows of `C − λI` are always multiples
 of each other (that's what det = 0 means), so there's one equation `a·x₁ + b·x₂ = 0`.
-Instead of choosing a free variable, use the swap-and-negate rule from
+For a 2×2 C, instead of choosing a free variable, use the swap-and-negate rule from
 [`eigen/`](../eigen/#step-2-eigenvectors-and-which-variable-to-set-to-1): **v = (−b, a)**.
 It never divides, so there's no row-1-vs-row-2 decision. If row 1 is all zeros, use
 row 2 the same way. Then divide by the length to make it a unit vector.
+
+Two caveats. If both rows are zero, C = λI: the data spreads equally in every
+direction and *any* unit vector is a principal component. And with more than two
+features, det = 0 only says the rows are dependent, not that each is a multiple of the
+first, so you need the full null space of `C − λI` (see
+[`vector-spaces/`](../vector-spaces/)), which is what `eigh` does numerically.
 
 `np.linalg.eigh` does the same thing numerically but returns eigenvalues in
 **ascending** order, which is why `fit` flips them. It also picks each vector's sign
@@ -83,7 +93,7 @@ datasets rather than on one worked example:
 | directions are orthonormal: `WᵀW = I` | C is symmetric |
 | `Σλ = trace(C)` | total variance is the same in any orthonormal basis |
 | `λᵢ = σᵢ² / n` from the SVD of the centered data | `XcᵀXc = V Σ² Vᵀ` |
-| reconstruction error from k PCs = squared dropped coordinates = n·(dropped λ's) | the dropped pieces are perpendicular to the kept ones |
+| reconstruction error from k PCs = squared dropped coordinates = n·(dropped λ's) | the dropped pieces are perpendicular to the kept ones (measured in the standardized units when `standardize=True`) |
 
 ## How many components
 
@@ -132,11 +142,12 @@ w = Σ⁻¹ (μ₁ − μ₀)          threshold  c = ½ · w · (μ₁ + μ₀)
 
 ## Tests
 
-`tests/test_components.py` (51 tests): every invariant in the table on three random
+`tests/test_components.py` (62 tests): every invariant in the table on three random
 datasets; deterministic signs; rebuilding with every k; `components_for` against the
 running shares; data on a plane needing exactly two components; units deciding PC1
 until standardizing, and standardized models rebuilding original units; random
 projections keeping squared distances on average with less spread for bigger k; and
 LDA beating connect-the-means under correlated noise, pointing toward class 1,
 flipping cleanly when the classes are swapped, and matching connect-the-means for
-round noise.
+round noise; plus bad input: data with no variance, impossible k,
+duplicate rows in the distance ratios, and LDA with a column that copies another.

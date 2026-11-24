@@ -164,3 +164,47 @@ def test_eigenvalue_rules_and_the_trace_det_check(trial):
     # check A² without solving its polynomial: trace = Σλ², det = Πλ²
     assert np.trace(A @ A) == pytest.approx(np.sum(lam**2).real)
     assert np.linalg.det(A @ A) == pytest.approx(np.prod(lam**2).real)
+
+
+# --- bad or degenerate input -----------------------------------------------------------
+
+def test_empty_matrix_is_rejected():
+    with pytest.raises(ValueError, match="at least one state"):
+        check_stochastic([])
+
+
+def test_swap_and_flip_has_nothing_to_solve_for_two_zeros():
+    with pytest.raises(ValueError, match="no equation"):
+        swap_and_flip(0, 0)
+
+
+def test_floats_are_read_as_the_decimals_they_print_as():
+    assert normalize([0.3, 0.2]) == [Fraction(3, 5), Fraction(2, 5)]
+    P = [[0.9, 0.5], [0.1, 0.5]]
+    assert distribution_after(P, [0.5, 0.5], 1) == [Fraction(7, 10), Fraction(3, 10)]
+
+
+def test_distribution_after_rejects_negative_steps_and_wrong_lengths():
+    P = [[Fraction(9, 10), Fraction(1, 2)], [Fraction(1, 10), Fraction(1, 2)]]
+    with pytest.raises(ValueError, match="negative"):
+        distribution_after(P, [1, 0], -1)
+    with pytest.raises(ValueError, match="entries but the chain has 2"):
+        distribution_after(P, [1, 0, 0], 3)
+    with pytest.raises(ValueError, match="entries but the chain has 2"):
+        distribution_after(P, [1], 3)
+
+
+def test_one_state_chain_has_nothing_to_forget():
+    assert mixing_factor([[1]]) == 0.0
+    assert steady_state([[1]]) == [1]
+
+
+def test_power_via_eigen_keeps_float_matrices_exact():
+    assert power_via_eigen([[4.0, 1.0], [2.0, 3.0]], [1, 0], 3) == \
+        power_via_eigen([[4, 1], [2, 3]], [1, 0], 3)
+
+
+@pytest.mark.parametrize("y, k", [([1, 0, 0], 2), ([1, 0], -1)])
+def test_power_via_eigen_rejects_bad_input(y, k):
+    with pytest.raises(ValueError):
+        power_via_eigen([[4, 1], [2, 3]], y, k)
